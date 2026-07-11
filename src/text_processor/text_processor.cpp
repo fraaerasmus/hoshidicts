@@ -306,20 +306,18 @@ std::u32string numbers_to_kanji(const std::u32string& text) {
   return result;
 }
 
-std::u32string ascii_lowercase(const std::u32string& text) {
+std::u32string unicode_lowercase(const std::u32string& text) {
   std::u32string result = text;
   for (auto& c : result) {
-    if (c >= U'A' && c <= U'Z') {
-      c = c - U'A' + U'a';
-    }
+    c = static_cast<char32_t>(utf8proc_tolower(static_cast<utf8proc_int32_t>(c)));
   }
   return result;
 }
 
-std::u32string ascii_capitalize_first(const std::u32string& text) {
+std::u32string unicode_capitalize_first(const std::u32string& text) {
   std::u32string result = text;
-  if (!result.empty() && result.front() >= U'a' && result.front() <= U'z') {
-    result.front() = result.front() - U'a' + U'A';
+  if (!result.empty()) {
+    result.front() = static_cast<char32_t>(utf8proc_toupper(static_cast<utf8proc_int32_t>(result.front())));
   }
   return result;
 }
@@ -340,11 +338,11 @@ std::vector<TextProcessor> get_common_latin_processors() {
   return {
       {.options = {0, 1},
        .process = [](const std::u32string& text, int opt) -> std::u32string {
-         return opt == 1 ? ascii_lowercase(text) : text;
+         return opt == 1 ? unicode_lowercase(text) : text;
        }},
       {.options = {0, 1},
        .process = [](const std::u32string& text, int opt) -> std::u32string {
-         return opt == 1 ? ascii_capitalize_first(text) : text;
+         return opt == 1 ? unicode_capitalize_first(text) : text;
        }},
   };
 }
