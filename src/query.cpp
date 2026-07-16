@@ -12,6 +12,7 @@
 #include <memory>
 #include <ranges>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -244,6 +245,20 @@ std::vector<TermResult> DictionaryQuery::query_raw(const std::string& expression
   query_pitch(results);
 
   return results;
+}
+
+void DictionaryQuery::order_glossaries(std::vector<GlossaryEntry>& glossaries) const {
+  std::unordered_map<std::string_view, size_t> dictionary_order;
+  dictionary_order.reserve(term_dicts_.size());
+  for (size_t i = 0; i < term_dicts_.size(); ++i) {
+    dictionary_order.try_emplace(term_dicts_[i].name, i);
+  }
+
+  const auto rank = [&](const GlossaryEntry& glossary) {
+    const auto it = dictionary_order.find(glossary.dict_name);
+    return it == dictionary_order.end() ? term_dicts_.size() : it->second;
+  };
+  std::ranges::stable_sort(glossaries, {}, rank);
 }
 
 void DictionaryQuery::query_freq(std::vector<TermResult>& terms) const {

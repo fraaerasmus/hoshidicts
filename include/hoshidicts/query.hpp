@@ -85,6 +85,7 @@ class DictionaryQuery {
  private:
   friend class Lookup;
   std::vector<TermResult> query_raw(const std::string& expression) const;
+  void order_glossaries(std::vector<GlossaryEntry>& glossaries) const;
   void materialize(TermResult& term) const;
 
   struct DictionaryData;
