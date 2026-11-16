@@ -38,6 +38,7 @@ std::string_view read_str(const uint8_t*& addr, uint32_t len) {
 }
 
 struct DictionaryQuery::DictionaryData {
+  std::string path;
   int version;
   hash::linear table;
   hash::bloom bloom;
@@ -105,6 +106,7 @@ void DictionaryQuery::add_dict_(const std::string& path, DictionaryType type) {
   }
 
   dict.data = std::make_unique<DictionaryData>();
+  dict.data->path = path;
   dict.data->version = version;
 
   dict.data->hash_table = memory::map_rd(path + "/hash.table");
@@ -148,6 +150,33 @@ void DictionaryQuery::add_freq_dict(const std::string& path) { add_dict(path, Di
 
 void DictionaryQuery::add_pitch_dict(const std::string& path) {
   add_dict(path, DictionaryQuery::DictionaryType::PITCH);
+}
+
+size_t DictionaryQuery::remove_dict(const std::string& path) {
+  size_t removed = 0;
+  for (auto* dicts : {&term_dicts_, &freq_dicts_, &pitch_dicts_}) {
+    removed += std::erase_if(*dicts, [&path](const Dictionary& d) { return d.data->path == path; });
+  }
+  return removed;
+}
+
+bool DictionaryQuery::set_dict_order(const std::vector<std::string>& paths) {
+  for (const auto& path : paths) {
+    const auto loaded = [&path](const std::vector<Dictionary>& dicts) {
+      return std::ranges::any_of(dicts, [&path](const Dictionary& d) { return d.data->path == path; });
+    };
+    if (!loaded(term_dicts_) && !loaded(freq_dicts_) && !loaded(pitch_dicts_)) {
+      return false;
+    }
+  }
+  const auto rank = [&paths](const Dictionary& d) {
+    const auto it = std::ranges::find(paths, d.data->path);
+    return it == paths.end() ? paths.size() : static_cast<size_t>(it - paths.begin());
+  };
+  for (auto* dicts : {&term_dicts_, &freq_dicts_, &pitch_dicts_}) {
+    std::ranges::stable_sort(*dicts, {}, rank);
+  }
+  return true;
 }
 
 std::vector<TermResult> DictionaryQuery::query(const std::string& expression) const {

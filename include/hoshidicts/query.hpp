@@ -71,6 +71,10 @@ class DictionaryQuery {
   void add_freq_dict(const std::string& path);
   void add_pitch_dict(const std::string& path);
 
+  // Paths match what add_*_dict was given. Unlisted dictionaries keep their relative order after the listed ones.
+  size_t remove_dict(const std::string& path);
+  bool set_dict_order(const std::vector<std::string>& paths);
+
   void query_freq(std::vector<TermResult>& terms) const;
   void query_pitch(std::vector<TermResult>& terms) const;
 
