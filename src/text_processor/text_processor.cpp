@@ -4,12 +4,12 @@
 #include <utf8.h>
 #include <utf8proc.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <fstream>
 #include <functional>
 #include <glaze/glaze.hpp>
-#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -101,6 +101,7 @@ bool is_in_range(uint32_t c, uint32_t range_start, uint32_t range_end) { return 
 // https://github.com/yomidevs/yomitan/blob/81d17d877fb18c62ba826210bf6db2b7f4d4deed/ext/js/language/ja/japanese.js#L472
 std::u32string hiragana_to_katakana(const std::u32string& text) {
   std::u32string result;
+  result.reserve(text.size());
   const uint32_t offset = (KATAKANA_CONVERSION_RANGE_START - HIRAGANA_CONVERSION_RANGE_START);
   for (char32_t c : text) {
     if (is_in_range(c, HIRAGANA_CONVERSION_RANGE_START, HIRAGANA_CONVERSION_RANGE_END)) {
@@ -114,6 +115,7 @@ std::u32string hiragana_to_katakana(const std::u32string& text) {
 // https://github.com/yomidevs/yomitan/blob/81d17d877fb18c62ba826210bf6db2b7f4d4deed/ext/js/language/ja/japanese.js#L441
 std::u32string katakana_to_hiragana(const std::u32string& text) {
   std::u32string result;
+  result.reserve(text.size());
   const uint32_t offset = (HIRAGANA_CONVERSION_RANGE_START - KATAKANA_CONVERSION_RANGE_START);
   for (char32_t c : text) {
     switch (c) {
@@ -160,6 +162,7 @@ std::u32string collapse_emphatic_sequences(const std::u32string& text, bool full
   std::u32string leading_emphatics = text.substr(0, left);
   std::u32string trailing_emphatics = text.substr(right + 1);
   std::u32string middle;
+  middle.reserve(static_cast<size_t>(right - left + 1));
   auto current_collapsed_code_point = static_cast<char32_t>(-1);
 
   for (ptrdiff_t i = left; i <= right; ++i) {
@@ -195,6 +198,7 @@ std::u32string nfkc(const std::u32string& text) {
 // https://github.com/yomidevs/yomitan/blob/3440451aecb23a43f308857969c890a55ce34a91/ext/js/language/ja/japanese.js#L489
 std::u32string alphanumeric_to_fullwidth(const std::u32string& text) {
   std::u32string result;
+  result.reserve(text.size());
   for (char32_t c : text) {
     if (is_in_range(c, U'0', U'9')) {
       c = static_cast<char32_t>(c + (0xff10 - 0x30));
@@ -245,6 +249,7 @@ std::u32string standardize_kanji(const std::u32string& text) {
   }();
 
   std::u32string result;
+  result.reserve(text.size());
   for (char32_t c : text) {
     auto it = map.find(c);
     result += it != map.end() ? it->second : c;
@@ -280,6 +285,7 @@ char32_t expand_mark(char32_t prev, char32_t mark) {
 
 std::u32string expand_iteration_marks(const std::u32string& text) {
   std::u32string result;
+  result.reserve(text.size());
   for (size_t i = 0; i < text.size(); ++i) {
     result += text[i];
     if (i + 1 < text.size()) {
@@ -296,6 +302,7 @@ std::u32string expand_iteration_marks(const std::u32string& text) {
 constexpr std::u32string_view KANJI_NUMBERS = U"〇一二三四五六七八九";
 std::u32string numbers_to_kanji(const std::u32string& text) {
   std::u32string result;
+  result.reserve(text.size());
   for (char32_t c : text) {
     if (is_in_range(c, 0xff10, 0xff19)) {
       result += KANJI_NUMBERS[c - 0xff10];
@@ -561,8 +568,8 @@ std::vector<TextProcessor> get_korean_postprocessors() {
   };
 }
 
-std::vector<TextProcessor> get_japanese_processors() {
-  return {
+const std::vector<TextProcessor>& get_japanese_processors() {
+  static const std::vector<TextProcessor> processors = {
       // https://github.com/yomidevs/yomitan/blob/81d17d877fb18c62ba826210bf6db2b7f4d4deed/ext/js/language/ja/japanese-text-preprocessors.js#L66
       {.options = {0, 1, 2},
        .process = [](const std::u32string& text, int opt) -> std::u32string {
@@ -603,49 +610,61 @@ std::vector<TextProcessor> get_japanese_processors() {
       {.options = {0, 1}, .process = [](const std::u32string& text, int opt) -> std::u32string {
          return opt == 1 ? numbers_to_kanji(text) : text;
       }}};
+  return processors;
 }
 
-std::vector<TextProcessor> get_processors(std::string_view language) {
+const std::vector<TextProcessor>& get_processors(std::string_view language) {
   if (language == "ja") {
     return get_japanese_processors();
   }
   if (language == "ko") {
-    return get_korean_preprocessors();
+    static const auto korean = get_korean_preprocessors();
+    return korean;
   }
   if (language == "fr") {
-    return get_french_processors();
+    static const auto french = get_french_processors();
+    return french;
   }
   if (language == "de") {
-    return get_german_processors();
+    static const auto german = get_german_processors();
+    return german;
   }
-  return get_common_latin_processors();
+  static const auto latin = get_common_latin_processors();
+  return latin;
 }
 
-std::vector<TextProcessor> get_postprocessors(std::string_view language) {
+const std::vector<TextProcessor>& get_postprocessors(std::string_view language) {
   if (language == "ko") {
-    return get_korean_postprocessors();
+    static const auto korean = get_korean_postprocessors();
+    return korean;
   }
-  return {};
+  static const std::vector<TextProcessor> none;
+  return none;
 }
 
 std::vector<TextVariant> run_processors(const std::string& src, const std::vector<TextProcessor>& processors) {
-  std::u32string text = utf8::utf8to32(src);
-  std::map<std::u32string, int> variants = {{text, 0}};
+  std::vector<std::pair<std::u32string, int>> variants;
+  variants.emplace_back(utf8::utf8to32(src), 0);
 
   for (const auto& processor : processors) {
-    std::map<std::u32string, int> next;
+    std::vector<std::pair<std::u32string, int>> next;
+    next.reserve(variants.size() * processor.options.size());
 
     for (const auto& [variant, steps] : variants) {
       for (int option : processor.options) {
-        auto processed = processor.process(variant, option);
-        int new_steps = (processed == variant) ? steps : steps + 1;
+        // Option 0 is the identity for every processor.
+        auto processed = option == 0 ? variant : processor.process(variant, option);
+        int new_steps = (option == 0 || processed == variant) ? steps : steps + 1;
 
-        auto [it, inserted] = next.try_emplace(processed, new_steps);
-        if (!inserted && new_steps < it->second) {
+        auto it = std::ranges::find_if(next, [&](const auto& entry) { return entry.first == processed; });
+        if (it == next.end()) {
+          next.emplace_back(std::move(processed), new_steps);
+        } else if (new_steps < it->second) {
           it->second = new_steps;
         }
       }
     }
+    std::ranges::sort(next, {}, &std::pair<std::u32string, int>::first);
     variants = std::move(next);
   }
 
