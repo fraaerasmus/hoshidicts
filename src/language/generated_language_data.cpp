@@ -11420,7 +11420,7 @@ static constexpr std::array<Transform, 54> transforms_ja = {{
     {std::string_view{"kansai-ben adjective negative"}, std::string_view{"kansai-ben"}, std::string_view{"Negative form of kansai-ben adjectives"}},
 }};
 
-static constexpr std::array<Rule, 834> rules_ja = {{
+static constexpr std::array<Rule, 835> rules_ja = {{
     {Suffix, std::string_view{"ければ"}, std::string_view{"い"}, std::string_view{""}, std::string_view{""}, std::string_view{""}, std::string_view{""}, 4096u, 256u, 0},
     {Suffix, std::string_view{"えば"}, std::string_view{"う"}, std::string_view{""}, std::string_view{""}, std::string_view{""}, std::string_view{""}, 4096u, 28u, 0},
     {Suffix, std::string_view{"けば"}, std::string_view{"く"}, std::string_view{""}, std::string_view{""}, std::string_view{""}, std::string_view{""}, 4096u, 28u, 0},
@@ -11653,6 +11653,7 @@ static constexpr std::array<Rule, 834> rules_ja = {{
     {Suffix, std::string_view{"たもうたり"}, std::string_view{"たまう"}, std::string_view{""}, std::string_view{""}, std::string_view{""}, std::string_view{""}, 0u, 28u, 12},
     {Suffix, std::string_view{"たゆとうたり"}, std::string_view{"たゆたう"}, std::string_view{""}, std::string_view{""}, std::string_view{""}, std::string_view{""}, 0u, 28u, 12},
     {Suffix, std::string_view{"くて"}, std::string_view{"い"}, std::string_view{""}, std::string_view{""}, std::string_view{""}, std::string_view{""}, 2048u, 256u, 13},
+    {Suffix, std::string_view{"くって"}, std::string_view{"い"}, std::string_view{""}, std::string_view{""}, std::string_view{""}, std::string_view{""}, 2048u, 256u, 13},
     {Suffix, std::string_view{"て"}, std::string_view{"る"}, std::string_view{""}, std::string_view{""}, std::string_view{""}, std::string_view{""}, 2048u, 3u, 13},
     {Suffix, std::string_view{"いて"}, std::string_view{"く"}, std::string_view{""}, std::string_view{""}, std::string_view{""}, std::string_view{""}, 2048u, 28u, 13},
     {Suffix, std::string_view{"いで"}, std::string_view{"ぐ"}, std::string_view{""}, std::string_view{""}, std::string_view{""}, std::string_view{""}, 2048u, 28u, 13},

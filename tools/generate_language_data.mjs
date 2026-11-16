@@ -71,6 +71,22 @@ const descriptors = [
   yiddishTransforms,
 ];
 
+const {suffixInflection} = await importYomitan('ext/js/language/language-transforms.js');
+
+// Rules hoshidicts adds on top of Yomitan, spliced in after an anchor rule so the output order is stable.
+const EXTRA_RULES = [
+  // Emphatic すごくって: the lookup rewrite guard rejects deinflecting through a collapsed っ.
+  {descriptor: japaneseTransforms, transform: '-て', after: 'くて$', rule: suffixInflection('くって', 'い', ['-て'], ['adj-i'])},
+];
+for (const {descriptor, transform, after, rule} of EXTRA_RULES) {
+  const rules = descriptor.transforms[transform].rules;
+  const index = rules.findIndex((r) => r.isInflected?.source === after);
+  if (index < 0) {
+    throw new Error(`anchor rule ${after} not found in ${descriptor.language} ${transform}`);
+  }
+  rules.splice(index + 1, 0, rule);
+}
+
 const KINDS = {
   suffix: 'Suffix',
   prefix: 'Prefix',

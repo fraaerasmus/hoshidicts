@@ -98,6 +98,12 @@ char32_t get_prolonged_hiragana(char32_t prev) {
 
 bool is_in_range(uint32_t c, uint32_t range_start, uint32_t range_end) { return c >= range_start && c <= range_end; }
 
+bool is_hiragana(char32_t c) { return is_in_range(c, 0x3041, 0x309f); }
+
+bool is_katakana(char32_t c) { return is_in_range(c, 0x30a1, 0x30fa) || is_in_range(c, 0xff66, 0xff9f); }
+
+bool is_sokuon(char32_t c) { return c == HIRAGANA_SMALL_TSU || c == KATAKANA_SMALL_TSU; }
+
 // https://github.com/yomidevs/yomitan/blob/81d17d877fb18c62ba826210bf6db2b7f4d4deed/ext/js/language/ja/japanese.js#L472
 std::u32string hiragana_to_katakana(const std::u32string& text) {
   std::u32string result;
@@ -613,6 +619,29 @@ const std::vector<TextProcessor>& get_japanese_processors() {
   return processors;
 }
 
+// Length of a katakana run ending the text, when that run follows hiragana (e.g. the マス of 食べマス).
+size_t katakana_word_length(const std::u32string& text) {
+  size_t start = text.size();
+  while (start > 0 && (is_katakana(text[start - 1]) || text[start - 1] == KANA_PROLONGED_SOUND_MARK)) {
+    start--;
+  }
+  while (start < text.size() && text[start] == KANA_PROLONGED_SOUND_MARK) {
+    start++;
+  }
+  return start > 0 && start < text.size() && is_hiragana(text[start - 1]) ? text.size() - start : 0;
+}
+
+// Trailing characters a deinflection may rewrite without reaching a っ the preprocessors dropped.
+size_t max_rewrite(const std::u32string& source, const std::u32string& variant) {
+  size_t length = 0;
+  for (size_t s = source.size(); s > 0 && length < variant.size(); s--, length++) {
+    if (is_sokuon(source[s - 1]) && !is_sokuon(variant[variant.size() - length - 1])) {
+      break;
+    }
+  }
+  return length;
+}
+
 const std::vector<TextProcessor>& get_processors(std::string_view language) {
   if (language == "ja") {
     return get_japanese_processors();
@@ -682,8 +711,24 @@ std::vector<TextVariant> text_processor::process(const std::string& src) {
   return process(src, "ja");
 }
 
-std::vector<TextVariant> text_processor::process(const std::string& src, const std::string& language) {
-  return run_processors(src, get_processors(language));
+std::vector<TextVariant> text_processor::process(const std::string& src, const std::string& language,
+                                                 char32_t next_char) {
+  if (language != "ja") {
+    return run_processors(src, get_processors(language));
+  }
+
+  // https://github.com/HuangAntimony/hoshidicts/commit/ad0be9190765ec06191c9b64b7029ab37aeb8d37
+  const std::u32string text = utf8::utf8to32(src);
+  const size_t katakana_word = katakana_word_length(text);
+  if (katakana_word > 0 && (is_katakana(next_char) || next_char == KANA_PROLONGED_SOUND_MARK)) {
+    return {{.text = src, .steps = 0, .max_rewrite = 0}};
+  }
+  auto variants = run_processors(src, get_processors(language));
+  for (auto& variant : variants) {
+    variant.min_rewrite = katakana_word;
+    variant.max_rewrite = max_rewrite(text, utf8::utf8to32(variant.text));
+  }
+  return variants;
 }
 
 std::vector<TextVariant> text_processor::postprocess(const std::string& src, const std::string& language) {
