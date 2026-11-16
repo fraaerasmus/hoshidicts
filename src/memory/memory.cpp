@@ -9,8 +9,21 @@
 #include <unistd.h>
 #endif
 
+namespace {
+size_t granularity() {
+#ifdef _WIN32
+  SYSTEM_INFO info;
+  GetSystemInfo(&info);
+  return info.dwAllocationGranularity;
+#else
+  return static_cast<size_t>(sysconf(_SC_PAGESIZE));
+#endif
+}
+}
+
 namespace memory {
-mapped_file map_rd(const std::string& path) {
+mapped_file map_rd(const std::string& path, uint64_t offset, size_t size) {
+  const size_t delta = offset % granularity();
 #ifdef _WIN32
   HANDLE file =
       CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -30,13 +43,22 @@ mapped_file map_rd(const std::string& path) {
     return {};
   }
 
-  auto* data = static_cast<uint8_t*>(MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0));
+  if (offset >= static_cast<uint64_t>(file_size.QuadPart)) {
+    CloseHandle(mapping);
+    return {};
+  }
+  if (size == 0) {
+    size = static_cast<size_t>(file_size.QuadPart - offset);
+  }
+  offset -= delta;
+  auto* data = static_cast<uint8_t*>(MapViewOfFile(mapping, FILE_MAP_READ, static_cast<DWORD>(offset >> 32),
+                                                   static_cast<DWORD>(offset & 0xFFFFFFFF), size + delta));
   CloseHandle(mapping);
   if (!data) {
     return {};
   }
 
-  return {.data = data, .size = static_cast<size_t>(file_size.QuadPart)};
+  return {.data = data + delta, .size = size};
 #else
   int fd = open(path.c_str(), O_RDONLY);
   if (fd < 0) {
@@ -49,13 +71,21 @@ mapped_file map_rd(const std::string& path) {
     return {};
   }
 
-  auto* data = static_cast<uint8_t*>(mmap(nullptr, st.st_size, PROT_READ, MAP_SHARED, fd, 0));
+  if (offset >= static_cast<uint64_t>(st.st_size)) {
+    close(fd);
+    return {};
+  }
+  if (size == 0) {
+    size = static_cast<size_t>(st.st_size - offset);
+  }
+  auto* data = static_cast<uint8_t*>(
+      mmap(nullptr, size + delta, PROT_READ, MAP_SHARED, fd, static_cast<off_t>(offset - delta)));
   close(fd);
   if (data == reinterpret_cast<uint8_t*>(MAP_FAILED)) {
     return {};
   }
 
-  return {.data = data, .size = static_cast<size_t>(st.st_size)};
+  return {.data = data + delta, .size = size};
 #endif
 }
 
@@ -117,10 +147,41 @@ void unmap(mapped_file mapping) {
     return;
   }
 
+  const size_t delta = reinterpret_cast<uintptr_t>(mapping.data) % granularity();
 #ifdef _WIN32
-  UnmapViewOfFile(mapping.data);
+  UnmapViewOfFile(mapping.data - delta);
 #else
-  munmap(mapping.data, mapping.size);
+  munmap(mapping.data - delta, mapping.size + delta);
+#endif
+}
+
+intptr_t open_rd(const std::string& path) {
+#ifdef _WIN32
+  HANDLE file =
+      CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  return file == INVALID_HANDLE_VALUE ? -1 : reinterpret_cast<intptr_t>(file);
+#else
+  return open(path.c_str(), O_RDONLY);
+#endif
+}
+
+bool read_at(intptr_t file, uint64_t offset, void* out, size_t size) {
+#ifdef _WIN32
+  OVERLAPPED overlapped{};
+  overlapped.Offset = static_cast<DWORD>(offset & 0xFFFFFFFF);
+  overlapped.OffsetHigh = static_cast<DWORD>(offset >> 32);
+  DWORD read = 0;
+  return ReadFile(reinterpret_cast<HANDLE>(file), out, static_cast<DWORD>(size), &read, &overlapped) && read == size;
+#else
+  return pread(static_cast<int>(file), out, size, static_cast<off_t>(offset)) == static_cast<ssize_t>(size);
+#endif
+}
+
+void close_rd(intptr_t file) {
+#ifdef _WIN32
+  CloseHandle(reinterpret_cast<HANDLE>(file));
+#else
+  close(static_cast<int>(file));
 #endif
 }
 }
