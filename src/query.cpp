@@ -68,6 +68,13 @@ DictionaryQuery::Dictionary::Dictionary(Dictionary&&) noexcept = default;
 DictionaryQuery::Dictionary& DictionaryQuery::Dictionary::operator=(Dictionary&&) noexcept = default;
 
 void DictionaryQuery::add_dict(const std::string& path, DictionaryType type) {
+  try {
+    add_dict_(path, type);
+  } catch (const std::exception&) {
+  }
+}
+
+void DictionaryQuery::add_dict_(const std::string& path, DictionaryType type) {
   int version = 0;
   if (std::filesystem::is_regular_file(path + "/.hoshidicts_3")) {
     version = 3;

@@ -106,6 +106,7 @@ class DictionaryQuery {
   enum DictionaryType : uint8_t { TERM, FREQ, PITCH };
 
   void add_dict(const std::string& path, DictionaryType);
+  void add_dict_(const std::string& path, DictionaryType);
 
   static std::string decompress_glossary(const void* data, size_t size);
   std::vector<Dictionary> term_dicts_;
