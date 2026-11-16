@@ -219,8 +219,22 @@ void expect_supported_language(const std::string& expected) {
 
 void test_supported_languages() {
   for (const auto& language : {"ar",  "de", "el",  "en",  "eo", "es", "eu", "fr", "ga",
-                               "grc", "ja", "kat", "ko",  "la", "sga", "sq", "tl", "yi"}) {
+                               "grc", "ja", "kat", "ko",  "la", "sga", "sq", "tl", "yi", "zh"}) {
     expect_supported_language(language);
+  }
+}
+
+void test_chinese() {
+  expect_variant("zh", "\u2f00\u4e2a", "\u4e00\u4e2a");
+  expect_variant("zh", "\u2f08", "\u4eba");
+  for (const auto& variant : text_processor::process("Beijing", "zh")) {
+    if (variant.text != "Beijing") {
+      throw std::runtime_error("Unexpected Chinese text variant: " + variant.text);
+    }
+  }
+  const auto results = Deinflector("zh").deinflect("\u8bfb\u4e66");
+  if (results.size() != 1 || results.front().text != "\u8bfb\u4e66" || Deinflector("zh").language() != "zh") {
+    throw std::runtime_error("Chinese should not deinflect");
   }
 }
 
@@ -508,6 +522,13 @@ void test_paragraph_stress() {
         "\u05d3\u05d9 \u05dc\u05e2\u05e6\u05d8\u05e2 \u05e9\u05d5\u05e8\u05d4 \u05d7\u05d6\u05e8\u05d8 \u05d4\u05d5\u05e0\u05d8\u05e1 \u05de\u05d9\u05d8 \u05e2\u05e2\u05e8."},
        {{"\u05d4\u05d5\u05e0\u05d8\u05e1", "\u05d4\u05d5\u05e0\u05d8", "ns", {"plural"}},
         {"\u05e2\u05e2\u05e8", "\ufb2e", "ns", {"umlaut_plural"}}}},
+      {"zh",
+       {"\u6211\u5728\u8bfb\u4e66\uff0c\u2f08\u5f88\u591a\u3002",
+        "\u8fd9\u672c\u4e66\u5f88\u597d\u3002",
+        "\u2f00\u4e2a\u2f08\uff0c\u8bfb\u4e66\u3002"},
+       {{"\u2f08\u5f88\u591a", "\u4eba\u5f88\u591a", "", {}},
+        {"\u2f00\u4e2a\u2f08", "\u4e00\u4e2a\u4eba", "", {}},
+        {"\u8bfb\u4e66", "\u8bfb\u4e66", "", {}}}},
   };
 
   size_t paragraph_count = 0;
@@ -549,6 +570,7 @@ void test_paragraph_stress() {
 int main() {
   try {
     test_supported_languages();
+    test_chinese();
     test_french();
     test_german();
     test_english();

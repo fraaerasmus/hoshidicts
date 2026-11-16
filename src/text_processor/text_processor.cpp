@@ -636,6 +636,38 @@ const std::vector<TextProcessor>& get_japanese_processors() {
   return processors;
 }
 
+// https://github.com/yomidevs/yomitan/blob/ce1b1bf/ext/js/language/CJK-util.js#L124
+// Kangxi radicals, CJK radical supplements and strokes decompose to the ideograph (⼀ → 一).
+std::u32string normalize_radicals(const std::u32string& text) {
+  std::u32string result;
+  result.reserve(text.size());
+  for (char32_t c : text) {
+    if (is_in_range(c, 0x2f00, 0x2fdf) || is_in_range(c, 0x2e80, 0x2eff) || is_in_range(c, 0x31c0, 0x31ef)) {
+      utf8proc_int32_t decomposed[4];
+      utf8proc_int32_t last_boundclass = 0;
+      const auto size = utf8proc_decompose_char(static_cast<utf8proc_int32_t>(c), decomposed, 4,
+                                                static_cast<utf8proc_option_t>(UTF8PROC_DECOMPOSE | UTF8PROC_COMPAT), &last_boundclass);
+      if (size > 0 && size <= 4) {
+        for (utf8proc_ssize_t i = 0; i < size; ++i) {
+          result += static_cast<char32_t>(decomposed[i]);
+        }
+        continue;
+      }
+    }
+    result += c;
+  }
+  return result;
+}
+
+std::vector<TextProcessor> get_chinese_processors() {
+  return {
+      {.options = {0, 1},
+       .process = [](const std::u32string& text, int opt) -> std::u32string {
+         return opt == 1 ? normalize_radicals(text) : text;
+       }},
+  };
+}
+
 // Length of a katakana run ending the text, when that run follows hiragana (e.g. the マス of 食べマス).
 size_t katakana_word_length(const std::u32string& text) {
   size_t start = text.size();
@@ -675,6 +707,10 @@ const std::vector<TextProcessor>& get_processors(std::string_view language) {
   if (language == "de") {
     static const auto german = get_german_processors();
     return german;
+  }
+  if (language == "zh") {
+    static const auto chinese = get_chinese_processors();
+    return chinese;
   }
   static const auto latin = get_common_latin_processors();
   return latin;

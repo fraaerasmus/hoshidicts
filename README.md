@@ -28,6 +28,7 @@ The generated language data currently supports:
 | `sq` | Albanian |
 | `tl` | Tagalog |
 | `yi` | Yiddish |
+| `zh` | Chinese (radical normalization only; no deinflection) |
 
 Aliases are also recognized for `ka` -> `kat` and `arz` -> `ar`.
 

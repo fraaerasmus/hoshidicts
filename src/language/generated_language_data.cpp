@@ -16539,7 +16539,16 @@ static constexpr std::array<Rule, 83> rules_yi = {{
     {Suffix, std::string_view{"ט"}, std::string_view{"נ"}, std::string_view{""}, std::string_view{""}, std::string_view{""}, std::string_view{""}, 3u, 2u, 5},
 }};
 
-static constexpr std::array<Language, 18> languages = {{
+static constexpr std::array<Condition, 0> conditions_zh = {{
+}};
+
+static constexpr std::array<Transform, 0> transforms_zh = {{
+}};
+
+static constexpr std::array<Rule, 0> rules_zh = {{
+}};
+
+static constexpr std::array<Language, 19> languages = {{
     {std::string_view{"ar"}, conditions_ar, transforms_ar, rules_ar},
     {std::string_view{"de"}, conditions_de, transforms_de, rules_de},
     {std::string_view{"el"}, conditions_el, transforms_el, rules_el},
@@ -16558,6 +16567,7 @@ static constexpr std::array<Language, 18> languages = {{
     {std::string_view{"sq"}, conditions_sq, transforms_sq, rules_sq},
     {std::string_view{"tl"}, conditions_tl, transforms_tl, rules_tl},
     {std::string_view{"yi"}, conditions_yi, transforms_yi, rules_yi},
+    {std::string_view{"zh"}, conditions_zh, transforms_zh, rules_zh},
 }};
 
 std::span<const Language> all_languages() { return languages; }

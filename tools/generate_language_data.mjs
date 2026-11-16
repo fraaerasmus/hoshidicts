@@ -69,6 +69,8 @@ const descriptors = [
   albanianTransforms,
   tagalogTransforms,
   yiddishTransforms,
+  // Yomitan has no Chinese transforms; the entry makes "zh" a supported language instead of falling back to "ja".
+  {language: 'zh', conditions: {}, transforms: {}},
 ];
 
 const {suffixInflection} = await importYomitan('ext/js/language/language-transforms.js');
