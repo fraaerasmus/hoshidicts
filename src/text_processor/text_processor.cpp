@@ -36,6 +36,7 @@ constexpr uint32_t KATAKANA_SMALL_KE = 0x30f6;
 constexpr uint32_t KANA_PROLONGED_SOUND_MARK = 0x30fc;
 constexpr uint32_t HIRAGANA_SMALL_TSU = 0x3063;
 constexpr uint32_t KATAKANA_SMALL_TSU = 0x30c3;
+constexpr char32_t KATAKANA_MIDDLE_DOT = 0x30fb;
 
 constexpr uint32_t HIRAGANA_CONVERSION_RANGE_START = 0x3041;
 constexpr uint32_t HIRAGANA_CONVERSION_RANGE_END = 0x3096;
@@ -314,6 +315,19 @@ std::u32string numbers_to_kanji(const std::u32string& text) {
       result += KANJI_NUMBERS[c - 0xff10];
     } else {
       result += c;
+    }
+  }
+  return result;
+}
+
+// Dictionaries often store names without the dot (カルミナブラーナ for カルミナ・ブラーナ).
+// A trailing dot is kept so a scan that stops on it does not match the shorter word.
+std::u32string strip_middle_dots(const std::u32string& text) {
+  std::u32string result;
+  result.reserve(text.size());
+  for (size_t i = 0; i < text.size(); i++) {
+    if (text[i] != KATAKANA_MIDDLE_DOT || i + 1 == text.size()) {
+      result += text[i];
     }
   }
   return result;
@@ -615,7 +629,10 @@ const std::vector<TextProcessor>& get_japanese_processors() {
        }},
       {.options = {0, 1}, .process = [](const std::u32string& text, int opt) -> std::u32string {
          return opt == 1 ? numbers_to_kanji(text) : text;
-      }}};
+       }},
+      {.options = {0, 1}, .process = [](const std::u32string& text, int opt) -> std::u32string {
+         return opt == 1 ? strip_middle_dots(text) : text;
+       }}};
   return processors;
 }
 
@@ -631,11 +648,12 @@ size_t katakana_word_length(const std::u32string& text) {
   return start > 0 && start < text.size() && is_hiragana(text[start - 1]) ? text.size() - start : 0;
 }
 
-// Trailing characters a deinflection may rewrite without reaching a っ the preprocessors dropped.
+// Trailing characters a deinflection may rewrite without reaching a っ or ・ the preprocessors dropped.
 size_t max_rewrite(const std::u32string& source, const std::u32string& variant) {
   size_t length = 0;
   for (size_t s = source.size(); s > 0 && length < variant.size(); s--, length++) {
-    if (is_sokuon(source[s - 1]) && !is_sokuon(variant[variant.size() - length - 1])) {
+    bool removable = is_sokuon(source[s - 1]) || source[s - 1] == KATAKANA_MIDDLE_DOT;
+    if (removable && !is_sokuon(variant[variant.size() - length - 1])) {
       break;
     }
   }
