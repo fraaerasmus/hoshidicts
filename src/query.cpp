@@ -152,6 +152,8 @@ void DictionaryQuery::add_pitch_dict(const std::string& path) {
 
 std::vector<TermResult> DictionaryQuery::query(const std::string& expression) const {
   auto results = query_raw(expression);
+  query_freq(results);
+  query_pitch(results);
   for (auto& term : results) {
     materialize(term);
   }
@@ -251,9 +253,6 @@ std::vector<TermResult> DictionaryQuery::query_raw(const std::string& expression
   for (auto& [_, term] : term_map) {
     results.push_back(std::move(term));
   }
-  query_freq(results);
-  query_pitch(results);
-
   return results;
 }
 
@@ -324,64 +323,68 @@ void DictionaryQuery::query_freq(std::vector<TermResult>& terms) const {
 
 void DictionaryQuery::query_pitch(std::vector<TermResult>& terms) const {
   for (auto& term : terms) {
-    for (const auto& [name, styles, data] : pitch_dicts_) {
-      uint64_t offset_addr = data->table(term.expression);
-      if (offset_addr == 0) {
+    query_pitch(term);
+  }
+}
+
+void DictionaryQuery::query_pitch(TermResult& term) const {
+  for (const auto& [name, styles, data] : pitch_dicts_) {
+    uint64_t offset_addr = data->table(term.expression);
+    if (offset_addr == 0) {
+      continue;
+    }
+    const uint8_t* index_addr = data->blobs.data + offset_addr;
+    auto count = read_val<uint32_t>(index_addr);
+
+    std::vector<int> pitch_positions;
+    std::vector<std::string> transcriptions;
+    for (uint32_t i = 0; i < count; i++) {
+      auto offset = read_val<uint64_t>(index_addr);
+      const uint8_t* blob_addr = data->blobs.data + offset;
+
+      auto type = read_val<uint8_t>(blob_addr);
+      if (type != 1) {
         continue;
       }
-      const uint8_t* index_addr = data->blobs.data + offset_addr;
-      auto count = read_val<uint32_t>(index_addr);
 
-      std::vector<int> pitch_positions;
-      std::vector<std::string> transcriptions;
-      for (uint32_t i = 0; i < count; i++) {
-        auto offset = read_val<uint64_t>(index_addr);
-        const uint8_t* blob_addr = data->blobs.data + offset;
+      auto expr_len = read_val<uint16_t>(blob_addr);
+      std::string_view expr = read_str(blob_addr, expr_len);
+      if (expr != term.expression) {
+        continue;
+      }
 
-        auto type = read_val<uint8_t>(blob_addr);
-        if (type != 1) {
-          continue;
-        }
+      auto mode_len = read_val<uint8_t>(blob_addr);
+      std::string_view mode = read_str(blob_addr, mode_len);
+      ParsedPitch parsed;
+      if (mode == "pitch") {
+        auto pitch_data_size = read_val<uint32_t>(blob_addr);
+        std::string_view pitch_data = read_str(blob_addr, pitch_data_size);
 
-        auto expr_len = read_val<uint16_t>(blob_addr);
-        std::string_view expr = read_str(blob_addr, expr_len);
-        if (expr != term.expression) {
-          continue;
-        }
-
-        auto mode_len = read_val<uint8_t>(blob_addr);
-        std::string_view mode = read_str(blob_addr, mode_len);
-        ParsedPitch parsed;
-        if (mode == "pitch") {
-          auto pitch_data_size = read_val<uint32_t>(blob_addr);
-          std::string_view pitch_data = read_str(blob_addr, pitch_data_size);
-
-          if (yomitan_parser::parse_pitch(pitch_data, parsed)) {
-            if (!parsed.reading.empty() && parsed.reading != term.reading) {
-              continue;
-            }
-            pitch_positions.insert(pitch_positions.end(), parsed.pitches.begin(), parsed.pitches.end());
+        if (yomitan_parser::parse_pitch(pitch_data, parsed)) {
+          if (!parsed.reading.empty() && parsed.reading != term.reading) {
+            continue;
           }
-        } else if (mode == "ipa") {
-          auto transcriptions_data_size = read_val<uint32_t>(blob_addr);
-          std::string_view transcriptions_data = read_str(blob_addr, transcriptions_data_size);
-          if (yomitan_parser::parse_ipa(transcriptions_data, parsed)) {
-            if (!parsed.reading.empty() && parsed.reading != term.reading) {
-              continue;
-            }
-            for (std::string_view transcription : parsed.transcriptions) {
-              transcriptions.emplace_back(transcription);
-            }
+          pitch_positions.insert(pitch_positions.end(), parsed.pitches.begin(), parsed.pitches.end());
+        }
+      } else if (mode == "ipa") {
+        auto transcriptions_data_size = read_val<uint32_t>(blob_addr);
+        std::string_view transcriptions_data = read_str(blob_addr, transcriptions_data_size);
+        if (yomitan_parser::parse_ipa(transcriptions_data, parsed)) {
+          if (!parsed.reading.empty() && parsed.reading != term.reading) {
+            continue;
+          }
+          for (std::string_view transcription : parsed.transcriptions) {
+            transcriptions.emplace_back(transcription);
           }
         }
       }
-      if (!pitch_positions.empty() || !transcriptions.empty()) {
-        term.pitches.emplace_back(PitchEntry{
-            .dict_name = name,
-            .pitch_positions = std::move(pitch_positions),
-            .transcriptions = std::move(transcriptions),
-        });
-      }
+    }
+    if (!pitch_positions.empty() || !transcriptions.empty()) {
+      term.pitches.emplace_back(PitchEntry{
+          .dict_name = name,
+          .pitch_positions = std::move(pitch_positions),
+          .transcriptions = std::move(transcriptions),
+      });
     }
   }
 }

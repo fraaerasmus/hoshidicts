@@ -58,6 +58,7 @@ std::vector<LookupResult> Lookup::lookup(const std::string& lookup_string, int m
         for (const auto& postprocessed : postprocessor_results) {
           auto terms = query_.query_raw(postprocessed.text);
           filter_by_pos(terms, deinflection, deinflector_);
+          query_.query_freq(terms);
 
           for (auto& term : terms) {
             // deduplicate glossaries
@@ -144,6 +145,7 @@ std::vector<LookupResult> Lookup::lookup(const std::string& lookup_string, int m
 
   for (auto& r : results) {
     query_.order_glossaries(r.term.glossaries);
+    query_.query_pitch(r.term);
     query_.materialize(r.term);
   }
 
